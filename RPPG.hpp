@@ -15,6 +15,7 @@
 #include <opencv2/dnn.hpp>
 
 #include <stdio.h>
+#include <list>
 
 using namespace cv;
 using namespace dnn;
@@ -108,10 +109,12 @@ private:
     Mat1d s_f;
     Mat1d bpms;
     Mat1d powerSpectrum;
-    double bpm = 0.0;
+    double bpm = 1.0;
     double meanBpm;
     double minBpm;
     double maxBpm;
+    list<double> prevBpms;
+    double displayBpm;
 
     // Logfiles
     ofstream logfile;

@@ -23,10 +23,12 @@ using namespace std;
 #define HIGH_BPM 240
 #define REL_MIN_FACE_SIZE 0.4
 #define SEC_PER_MIN 60
-#define MAX_CORNERS 10
+//#define MAX_CORNERS 0
+#define MAX_CORNERS 20
 #define MIN_CORNERS 5
-#define QUALITY_LEVEL 0.01
-#define MIN_DISTANCE 25
+#define QUALITY_LEVEL 0.001
+//#define MIN_DISTANCE 25
+#define MIN_DISTANCE 10
 
 bool RPPG::load(const rPPGAlgorithm rPPGAlg, const faceDetAlgorithm faceDetAlg,
                 const int width, const int height, const double timeBase, const int downsample,
@@ -93,14 +95,14 @@ void RPPG::processFrame(Mat &frameRGB, Mat &frameGray, int time) {
 
     if (!faceValid) {
 
-        cout << "Not valid, finding a new face" << endl;
+        // cout << "Not valid, finding a new face" << endl;
 
         lastScanTime = time;
         detectFace(frameRGB, frameGray);
 
     } else if ((time - lastScanTime) * timeBase >= 1/rescanFrequency) {
 
-        cout << "Valid, but rescanning face" << endl;
+        // cout << "Valid, but rescanning face" << endl;
 
         lastScanTime = time;
         detectFace(frameRGB, frameGray);
@@ -108,7 +110,7 @@ void RPPG::processFrame(Mat &frameRGB, Mat &frameGray, int time) {
 
     } else {
 
-        cout << "Tracking face" << endl;
+        //cout << "Tracking face" << endl;
 
         trackFace(frameGray);
     }
@@ -179,7 +181,7 @@ void RPPG::processFrame(Mat &frameRGB, Mat &frameGray, int time) {
 
 void RPPG::detectFace(Mat &frameRGB, Mat &frameGray) {
 
-    cout << "Scanning for faces…" << endl;
+    // cout << "Scanning for faces…" << endl;
     vector<Rect> boxes = {};
 
     switch (faceDetAlg) {
@@ -215,17 +217,19 @@ void RPPG::detectFace(Mat &frameRGB, Mat &frameGray) {
 
     if (boxes.size() > 0) {
 
-        cout << "Found a face" << endl;
+        cout << "{\"face\": true}" << endl;
 
         setNearestBox(boxes);
+        //if(corners.size() < MIN_CORNERS){
         detectCorners(frameGray);
+        //}
         updateROI();
         updateMask(frameGray);
         faceValid = true;
 
     } else {
 
-        cout << "Found no face" << endl;
+        cout << "{\"face\": false}" << endl;
         invalidateFace();
     }
 }
@@ -272,6 +276,7 @@ void RPPG::detectCorners(Mat &frameGray) {
                         3,
                         false,
                         0.04);
+    //cout << "CORNERS SIZE " << corners.size() << "\n";
 }
 
 void RPPG::trackFace(Mat &frameGray) {
@@ -302,7 +307,7 @@ void RPPG::trackFace(Mat &frameGray) {
             corners_0v.push_back(corners_0[j]);
             corners_1v.push_back(corners_1[j]);
         } else {
-            cout << "Mis!" << std::endl;
+            //cout << "Mis!" << std::endl;
         }
     }
 
@@ -337,7 +342,7 @@ void RPPG::trackFace(Mat &frameGray) {
         }
 
     } else {
-        cout << "Tracking failed! Not enough corners left." << endl;
+        // cout << "Tracking failed! Not enough corners left." << endl
         invalidateFace();
     }
 }
@@ -349,7 +354,7 @@ void RPPG::updateROI() {
 
 void RPPG::updateMask(Mat &frameGray) {
 
-    cout << "Update mask" << endl;
+    // cout << "Update mask" << endl;
 
     mask = Mat::zeros(frameGray.size(), frameGray.type());
     rectangle(mask, this->roi, WHITE, FILLED);
@@ -363,6 +368,9 @@ void RPPG::invalidateFace() {
     re = Mat1b();
     powerSpectrum = Mat1d();
     faceValid = false;
+    corners.clear();
+    prevBpms.clear();
+    //cout << "Invalidated FACE. Corners size " << corners.size() << "\n";
 }
 
 void RPPG::extractSignal_g() {
@@ -543,7 +551,9 @@ void RPPG::estimateHeartrate() {
         bpm = pmax.y * fps / total * SEC_PER_MIN;
         bpms.push_back(bpm);
 
-        cout << "FPS=" << fps << " Vals=" << powerSpectrum.rows << " Peak=" << pmax.y << " BPM=" << bpm << endl;
+        //cout << bpm << endl;
+
+        //cout << "FPS=" << fps << " Vals=" << powerSpectrum.rows << " Peak=" << pmax.y << " BPM=" << bpm << endl;
 
         // Logging
         if (logMode) {
@@ -572,9 +582,15 @@ void RPPG::estimateHeartrate() {
         minBpm = bpms.at<double>(0, 0);
         maxBpm = bpms.at<double>(bpms.rows-1, 0);
 
-        std::cout << "meanBPM=" << meanBpm << " minBpm=" << minBpm << " maxBpm=" << maxBpm << std::endl;
+        // std::cout << "meanBPM=" << meanBpm << " minBpm=" << minBpm << " maxBpm=" << maxBpm << std::endl;
+        cout << "{\"face\": true, \"bpm\": " << meanBpm << "}" << endl;
 
         bpms.pop_back(bpms.rows);
+        prevBpms.push_back(meanBpm);
+        // TODO dom code
+        if(prevBpms.size() > 20){
+            prevBpms.pop_front();
+        } 
     }
 }
 
@@ -600,56 +616,90 @@ void RPPG::draw(cv::Mat &frameRGB) {
     // Draw roi
     rectangle(frameRGB, roi, GREEN);
 
+    bool stable = !s_f.empty() && !powerSpectrum.empty();
+
     // Draw bounding box
-    rectangle(frameRGB, box, RED);
-
-    // Draw signal
-    if (!s_f.empty() && !powerSpectrum.empty()) {
-
-        // Display of signals with fixed dimensions
-        double displayHeight = box.height/2.0;
-        double displayWidth = box.width*0.8;
-
-        // Draw signal
-        double vmin, vmax;
-        Point pmin, pmax;
-        minMaxLoc(s_f, &vmin, &vmax, &pmin, &pmax);
-        double heightMult = displayHeight/(vmax - vmin);
-        double widthMult = displayWidth/(s_f.rows - 1);
-        double drawAreaTlX = box.tl().x + box.width + 20;
-        double drawAreaTlY = box.tl().y;
-        Point p1(drawAreaTlX, drawAreaTlY + (vmax - s_f.at<double>(0, 0))*heightMult);
-        Point p2;
-        for (int i = 1; i < s_f.rows; i++) {
-            p2 = Point(drawAreaTlX + i * widthMult, drawAreaTlY + (vmax - s_f.at<double>(i, 0))*heightMult);
-            line(frameRGB, p1, p2, RED, 2);
-            p1 = p2;
-        }
-
-        // Draw powerSpectrum
-        const int total = s_f.rows;
-        Mat bandMask = Mat::zeros(s_f.size(), CV_8U);
-        bandMask.rowRange(min(low, total), min(high, total) + 1).setTo(ONE);
-        minMaxLoc(powerSpectrum, &vmin, &vmax, &pmin, &pmax, bandMask);
-        heightMult = displayHeight/(vmax - vmin);
-        widthMult = displayWidth/(high - low);
-        drawAreaTlX = box.tl().x + box.width + 20;
-        drawAreaTlY = box.tl().y + box.height/2.0;
-        p1 = Point(drawAreaTlX, drawAreaTlY + (vmax - powerSpectrum.at<double>(low, 0))*heightMult);
-        for (int i = low + 1; i <= high; i++) {
-            p2 = Point(drawAreaTlX + (i - low) * widthMult, drawAreaTlY + (vmax - powerSpectrum.at<double>(i, 0)) * heightMult);
-            line(frameRGB, p1, p2, RED, 2);
-            p1 = p2;
-        }
+    if(stable){
+        rectangle(frameRGB, box, BLUE);
+    }else {
+        rectangle(frameRGB, box, RED);
     }
+
+    // TODO remove the comment
+    // Draw signal
+    //if (!s_f.empty() && !powerSpectrum.empty()) {
+
+    //    // Display of signals with fixed dimensions
+    //    double displayHeight = box.height/2.0;
+    //    double displayWidth = box.width*0.8;
+
+    //    // Draw signal
+    //    double vmin, vmax;
+    //    Point pmin, pmax;
+    //    minMaxLoc(s_f, &vmin, &vmax, &pmin, &pmax);
+    //    double heightMult = displayHeight/(vmax - vmin);
+    //    double widthMult = displayWidth/(s_f.rows - 1);
+    //    double drawAreaTlX = box.tl().x + box.width + 20;
+    //    double drawAreaTlY = box.tl().y;
+    //    Point p1(drawAreaTlX, drawAreaTlY + (vmax - s_f.at<double>(0, 0))*heightMult);
+    //    Point p2;
+    //    for (int i = 1; i < s_f.rows; i++) {
+    //        p2 = Point(drawAreaTlX + i * widthMult, drawAreaTlY + (vmax - s_f.at<double>(i, 0))*heightMult);
+    //        line(frameRGB, p1, p2, RED, 2);
+    //        p1 = p2;
+    //    }
+
+    //    // Draw powerSpectrum
+    //    const int total = s_f.rows;
+    //    Mat bandMask = Mat::zeros(s_f.size(), CV_8U);
+    //    bandMask.rowRange(min(low, total), min(high, total) + 1).setTo(ONE);
+    //    minMaxLoc(powerSpectrum, &vmin, &vmax, &pmin, &pmax, bandMask);
+    //    heightMult = displayHeight/(vmax - vmin);
+    //    widthMult = displayWidth/(high - low);
+    //    drawAreaTlX = box.tl().x + box.width + 20;
+    //    drawAreaTlY = box.tl().y + box.height/2.0;
+    //    p1 = Point(drawAreaTlX, drawAreaTlY + (vmax - powerSpectrum.at<double>(low, 0))*heightMult);
+    //    for (int i = low + 1; i <= high; i++) {
+    //        p2 = Point(drawAreaTlX + (i - low) * widthMult, drawAreaTlY + (vmax - powerSpectrum.at<double>(i, 0)) * heightMult);
+    //        line(frameRGB, p1, p2, RED, 2);
+    //        p1 = p2;
+    //    }
+    //}
 
     std::stringstream ss;
 
     // Draw BPM text
     if (faceValid) {
-        ss.precision(3);
-        ss << meanBpm << " bpm";
-        putText(frameRGB, ss.str(), Point(box.tl().x, box.tl().y - 10), FONT_HERSHEY_PLAIN, 2, RED, 2);
+        double min = -1.0;
+        double max = -1.0;
+        double avg = -1.0;
+        double total = 0;
+        if(prevBpms.size() == 5){
+            for(double bpmSample: prevBpms){
+                total += bpmSample;
+                if (min == -1 || bpmSample < min){
+                    min = bpmSample;
+                }
+                if (max == -1 || max < bpmSample){
+                    max = bpmSample;
+                }
+            }
+            avg  = total / 5.0;
+            if (max - avg < 3 && avg - min < 3){
+                displayBpm = meanBpm;
+            }
+        } else{
+            displayBpm = meanBpm;
+        }
+        
+
+        ss.precision(2);
+        ss << displayBpm << " BPM";
+        if(stable){
+            putText(frameRGB, ss.str(), Point(box.tl().x, box.tl().y - 10), FONT_HERSHEY_PLAIN, 2, BLUE, 2);
+        } else {
+            putText(frameRGB, ss.str(), Point(box.tl().x, box.tl().y - 10), FONT_HERSHEY_PLAIN, 2, RED, 2);
+        }
     }
 
     // Draw FPS text

@@ -121,7 +121,7 @@ int main(int argc, char * argv[]) {
         rPPGAlg = to_rppgAlgorithm(DEFAULT_RPPG_ALGORITHM);
     }
 
-    cout << "Using rPPG algorithm " << rPPGAlg << "." << endl;
+    //cout << "Using rPPG algorithm " << rPPGAlg << "." << endl;
 
     // face detection algorithm setting
     faceDetAlgorithm faceDetAlg;
@@ -132,7 +132,7 @@ int main(int argc, char * argv[]) {
         faceDetAlg = to_faceDetAlgorithm(DEFAULT_FACEDET_ALGORITHM);
     }
 
-    cout << "Using face detection algorithm " << faceDetAlg << "." << endl;
+    //cout << "Using face detection algorithm " << faceDetAlg << "." << endl;
 
     // rescanFrequency setting
     double rescanFrequency;
@@ -230,8 +230,8 @@ int main(int argc, char * argv[]) {
     }
 
     std::string title = offlineMode ? "rPPG offline" : "rPPG online";
-    cout << title << endl;
-    cout << "Processing " << (offlineMode ? input : "live feed") << endl;
+    // cout << title << endl;
+    // cout << "Processing " << (offlineMode ? input : "live feed") << endl;
 
     // Configure logfile path
     string LOG_PATH;
@@ -250,9 +250,9 @@ int main(int argc, char * argv[]) {
     const double TIME_BASE = 0.001;
 
     // Print video information
-    cout << "SIZE: " << WIDTH << "x" << HEIGHT << endl;
-    cout << "FPS: " << FPS << endl;
-    cout << "TIME BASE: " << TIME_BASE << endl;
+    //cout << "SIZE: " << WIDTH << "x" << HEIGHT << endl;
+    //cout << "FPS: " << FPS << endl;
+    //cout << "TIME BASE: " << TIME_BASE << endl;
 
     std::ostringstream window_title;
     window_title << title << " - " << WIDTH << "x" << HEIGHT << " -rppg " << rPPGAlg << " -facedet " << faceDetAlg << " -r " << rescanFrequency << " -f " << samplingFrequency << " -min " << minSignalSize << " -max " << maxSignalSize << " -ds " << downsample;
@@ -267,7 +267,7 @@ int main(int argc, char * argv[]) {
               DNN_PROTO_PATH, DNN_MODEL_PATH,
               log, gui);
 
-    cout << "START ALGORITHM" << endl;
+    //cout << "START ALGORITHM" << endl;
 
     int i = 0;
     Mat frameRGB, frameGray;
@@ -276,6 +276,7 @@ int main(int argc, char * argv[]) {
 
         // Grab RGB frame
         cap.read(frameRGB);
+        pyrDown(frameRGB, frameRGB, Size(frameRGB.cols/2, frameRGB.rows/2));
 
         if (frameRGB.empty())
             break;
